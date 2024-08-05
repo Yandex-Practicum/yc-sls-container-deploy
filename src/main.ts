@@ -1,27 +1,29 @@
 import * as core from '@actions/core';
 import { context } from '@actions/github';
-import { serviceClients, Session, waitForOperation, decodeMessage } from '@yandex-cloud/nodejs-sdk';
+import { Session, decodeMessage, serviceClients, waitForOperation } from '@yandex-cloud/nodejs-sdk';
 
+import { SetAccessBindingsRequest } from '@yandex-cloud/nodejs-sdk/dist/generated/yandex/cloud/access/access';
+import { LogLevel_Level } from '@yandex-cloud/nodejs-sdk/dist/generated/yandex/cloud/logging/v1/log_entry';
 import {
-  ListContainersResponse,
-  ListContainersRequest,
+  Container,
+  LogOptions,
+  Revision,
+  StorageMount,
+} from '@yandex-cloud/nodejs-sdk/dist/generated/yandex/cloud/serverless/containers/v1/container';
+import {
   CreateContainerRequest,
   DeployContainerRevisionRequest,
+  ListContainersRequest,
+  ListContainersResponse,
 } from '@yandex-cloud/nodejs-sdk/dist/generated/yandex/cloud/serverless/containers/v1/container_service';
-import {
-  LogOptions,
-  StorageMount,
-  Container,
-  Revision,
-} from '@yandex-cloud/nodejs-sdk/dist/generated/yandex/cloud/serverless/containers/v1/container';
-import { LogLevel_Level } from '@yandex-cloud/nodejs-sdk/dist/generated/yandex/cloud/logging/v1/log_entry';
-import { SetAccessBindingsRequest } from '@yandex-cloud/nodejs-sdk/dist/generated/yandex/cloud/access/access';
-import { parseMemory } from './memory';
 import { parseLogOptionsMinLevel } from './log-options-min-level';
-import { parseStorageMounts } from './storage-mounts';
+import { parseMemory } from './memory';
 import { fromServiceAccountJsonFile } from './service-account-json';
+import { parseStorageMounts } from './storage-mounts';
 
 type DeepPartial<T> = T extends object ? { [P in keyof T]?: DeepPartial<T[P]> } : T;
+
+const OPERATION_TIMEOUT_MS = 60 * 60 * 1000; // 60 minutes
 
 const findContainerByName = async (
   session: Session,
@@ -49,7 +51,8 @@ const createContainer = async (session: Session, folderId: string, containerName
       description: `Created from: ${repo.owner}/${repo.repo}`,
     }),
   );
-  const operation = await waitForOperation(containerCreateOperation, session);
+
+  const operation = await waitForOperation(containerCreateOperation, session, OPERATION_TIMEOUT_MS);
 
   if (operation.response) {
     return decodeMessage<Container>(operation.response);
@@ -95,7 +98,7 @@ const createRevision = async (
 
   const revisionDeployOperation = await client.deployRevision(DeployContainerRevisionRequest.fromPartial(req as any));
 
-  const operation = await waitForOperation(revisionDeployOperation, session);
+  const operation = await waitForOperation(revisionDeployOperation, session, OPERATION_TIMEOUT_MS);
 
   if (operation.response) {
     return decodeMessage<Revision>(operation.response);
